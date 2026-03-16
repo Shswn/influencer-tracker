@@ -1,8 +1,3 @@
-Gemini 说
-这是一个非常专业的决定！在 GitHub 上，一份优质的 README.md 文档就是项目的“脸面”。它不仅能帮助你整理思路，更能让你的同事、朋友、甚至未来的投资者瞬间看懂这个项目的价值和你的技术能力。
-
-我已经为你起草了一份标准的 GitHub README.md 文档。你可以直接全选复制下面的内容，然后在你的 GitHub 仓库里点击 Add file -> Create new file，文件名填入 README.md，然后粘贴进去并提交（Commit）即可。
-
 🚀 海外达人营销自动化管理系统 (Influencer Tracker)
 这是一个专为海外出海团队打造的极简、安全、端到端达人（Influencer）建联与跟进管理系统。
 
