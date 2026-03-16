@@ -32,7 +32,7 @@ def check_password():
         return True
 
     # 绘制登录界面
-    st.markdown("<br><br>", unsafe_allow_input=True)
+  st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.title("🔐 团队内部管理系统")
