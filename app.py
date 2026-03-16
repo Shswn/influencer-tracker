@@ -8,7 +8,6 @@ from datetime import datetime
 st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wide")
 
 # ================= 2. 数据库初始化 (Secrets 云端安全版) =================
-# 💡 提示：请确保已在 Streamlit 后台 Settings -> Secrets 中填入对应的值
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -32,14 +31,14 @@ def check_password():
         return True
 
     # 绘制登录界面
-    st.write("## ")  # ✅ 这里已经修复，代替了之前报错的 markdown
+    st.write("## ")  
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.title("🔐 团队内部管理系统")
         password = st.text_input("请输入访问密码：", type="password")
         if st.button("进入系统"):
-            # 💡 你可以在这里修改你的团队密码
-            if password == "shawn666": 
+            # 💡 极其安全：系统去后台读取你刚才设置的 APP_PASSWORD
+            if password == st.secrets["APP_PASSWORD"]: 
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
