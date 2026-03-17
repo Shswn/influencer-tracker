@@ -4,10 +4,10 @@ from supabase import create_client, Client
 import re
 from datetime import datetime
 
-# ================= 1. 页面配置 (必须放在最前面) =================
+# ================= 1. 页面配置 =================
 st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wide")
 
-# ================= 2. 数据库初始化 (Secrets 云端安全版) =================
+# ================= 2. 数据库初始化 =================
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -21,23 +21,19 @@ def init_connection():
 
 supabase = init_connection()
 
-# ================= 3. 极简登录校验逻辑 =================
+# ================= 3. 登录校验逻辑 =================
 def check_password():
-    """如果密码正确则返回 True，否则显示登录界面"""
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
-
     if st.session_state["password_correct"]:
         return True
 
-    # 绘制登录界面
     st.write("## ")  
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.title("🔐 团队内部管理系统")
         password = st.text_input("请输入访问密码：", type="password")
         if st.button("进入系统"):
-            # 💡 极其安全：系统去后台读取你刚才设置的 APP_PASSWORD
             if password == st.secrets["APP_PASSWORD"]: 
                 st.session_state["password_correct"] = True
                 st.rerun()
@@ -55,13 +51,19 @@ if check_password():
     # 侧边栏设置
     st.sidebar.title("⚡️ 自动化管理中心")
     st.sidebar.info("当前状态：已登录")
-    menu = st.sidebar.radio("请选择操作", ["1. 批量抓取今日新邮箱", "2. 批量更新已回复", "3. 每日数据看板"])
+    # 💡 这里多加了一个菜单选项！
+    menu = st.sidebar.radio("请选择操作", [
+        "1. 批量抓取今日新邮箱", 
+        "2. 批量更新已回复", 
+        "3. 每日数据看板", 
+        "4. 邮件模板配置中心"
+    ])
     
     if st.sidebar.button("安全退出"):
         st.session_state["password_correct"] = False
         st.rerun()
 
-    # 模块 1：智能抓取今日新邮箱
+    # --- 模块 1：抓取 ---
     if menu == "1. 批量抓取今日新邮箱":
         st.header("📥 智能提取并录入今日新邮箱")
         today_date = datetime.today().strftime("%Y-%m-%d")
@@ -74,13 +76,13 @@ if check_password():
                 if not extracted_emails:
                     st.warning("⚠️ 没有识别到有效的邮箱地址！")
                 else:
-                    success_count = 0
-                    duplicate_count = 0
+                    success_count, duplicate_count = 0, 0
                     for email in extracted_emails:
                         email_clean = email.lower()
                         try:
+                            # 💡 插入时自动将 last_contact_date 留空，followup_count 设为 0
                             supabase.table('influencer_emails').insert(
-                                {"email": email_clean, "collect_date": today_date, "status": "未回复"}
+                                {"email": email_clean, "collect_date": today_date, "status": "未回复", "followup_count": 0}
                             ).execute()
                             success_count += 1
                         except:
@@ -89,7 +91,7 @@ if check_password():
             else:
                 st.warning("⚠️ 文本框为空！")
 
-    # 模块 2：批量更新已回复邮箱
+    # --- 模块 2：更新 ---
     elif menu == "2. 批量更新已回复":
         st.header("🔄 自动匹配并更新【已回复】")
         reply_text = st.text_area("粘贴已回复的邮件信息：", height=250)
@@ -107,7 +109,7 @@ if check_password():
                             update_count += 1
                     st.success(f"🎉 更新完毕！成功匹配并更新了 {update_count} 个邮箱。")
 
-    # 模块 3：每日数据看板
+    # --- 模块 3：看板 ---
     elif menu == "3. 每日数据看板":
         st.header("📊 每日跟进数据追踪 (云端实时)")
         response = supabase.table('influencer_emails').select("*").execute()
@@ -134,8 +136,6 @@ if check_password():
                 unreplied_df = df_view[df_view['status'] == '未回复'].reset_index(drop=True)
                 if not unreplied_df.empty:
                     st.dataframe(unreplied_df[['email']], use_container_width=True)
-                    emails_to_copy = "\n".join(unreplied_df['email'].tolist())
-                    st.text_area("复制发密送(BCC)：", emails_to_copy, height=150)
             with right_col:
                 st.subheader(f"🎉 成功破冰名单 ({replied}个)：")
                 replied_df = df_view[df_view['status'] == '已回复'].reset_index(drop=True)
@@ -143,3 +143,29 @@ if check_password():
                     st.dataframe(replied_df[['email']], use_container_width=True)
         else:
             st.info("云端数据库为空，快去录入吧！")
+
+    # --- 模块 4：全新增加的邮件模板配置中心 ---
+    elif menu == "4. 邮件模板配置中心":
+        st.header("📝 自动化发信模板配置")
+        st.info("💡 在这里修改的模板，将作为后续全自动二刷发信的标准内容。")
+
+        # 从云端拉取当前已有的模板
+        response = supabase.table('email_templates').select("*").eq("id", 1).execute()
+        existing_data = response.data
+
+        # 如果云端有数据就显示云端的，如果没有就显示默认的占位符
+        default_subject = existing_data[0]['subject'] if existing_data else "Follow up regarding our collaboration"
+        default_body = existing_data[0]['body'] if existing_data else "Hi there,\n\nJust following up on my previous email to see if you'd be interested in collaborating with us!\n\nBest,\nShawn"
+
+        new_subject = st.text_input("✉️ 邮件标题 (Subject)：", value=default_subject)
+        new_body = st.text_area("📄 邮件正文 (Body)：", value=default_body, height=300)
+
+        if st.button("💾 保存模板到云端"):
+            try:
+                # 使用 upsert：如果 id=1 存在就更新，不存在就新建
+                supabase.table('email_templates').upsert(
+                    {"id": 1, "subject": new_subject, "body": new_body}
+                ).execute()
+                st.success("✅ 模板已成功保存！明天的自动化任务将使用此最新内容。")
+            except Exception as e:
+                st.error(f"保存失败，请检查数据库配置: {e}")
