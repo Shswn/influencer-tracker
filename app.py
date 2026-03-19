@@ -3,14 +3,16 @@ import pandas as pd
 from supabase import create_client, Client
 import re
 from datetime import datetime
+import resend  # 💡 新增：引入发件引擎
 
 # ================= 1. 页面配置 =================
 st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wide")
 
-# ================= 2. 数据库初始化 =================
+# ================= 2. 数据库与引擎初始化 =================
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+    resend.api_key = st.secrets["RESEND_API_KEY"]  # 💡 新增：装载你刚才配置的钥匙
 except Exception:
     st.error("❌ 未检测到 Secrets 配置，请在 Streamlit 后台设置环境变量。")
     st.stop()
@@ -48,10 +50,8 @@ def extract_emails(text):
 
 # ================= 5. 主程序入口 =================
 if check_password():
-    # 侧边栏设置
     st.sidebar.title("⚡️ 自动化管理中心")
     st.sidebar.info("当前状态：已登录")
-    # 💡 这里多加了一个菜单选项！
     menu = st.sidebar.radio("请选择操作", [
         "1. 批量抓取今日新邮箱", 
         "2. 批量更新已回复", 
@@ -80,7 +80,6 @@ if check_password():
                     for email in extracted_emails:
                         email_clean = email.lower()
                         try:
-                            # 💡 插入时自动将 last_contact_date 留空，followup_count 设为 0
                             supabase.table('influencer_emails').insert(
                                 {"email": email_clean, "collect_date": today_date, "status": "未回复", "followup_count": 0}
                             ).execute()
@@ -144,16 +143,14 @@ if check_password():
         else:
             st.info("云端数据库为空，快去录入吧！")
 
-    # --- 模块 4：全新增加的邮件模板配置中心 ---
+    # --- 模块 4：邮件模板配置与测试 ---
     elif menu == "4. 邮件模板配置中心":
         st.header("📝 自动化发信模板配置")
         st.info("💡 在这里修改的模板，将作为后续全自动二刷发信的标准内容。")
 
-        # 从云端拉取当前已有的模板
         response = supabase.table('email_templates').select("*").eq("id", 1).execute()
         existing_data = response.data
 
-        # 如果云端有数据就显示云端的，如果没有就显示默认的占位符
         default_subject = existing_data[0]['subject'] if existing_data else "Follow up regarding our collaboration"
         default_body = existing_data[0]['body'] if existing_data else "Hi there,\n\nJust following up on my previous email to see if you'd be interested in collaborating with us!\n\nBest,\nShawn"
 
@@ -162,10 +159,31 @@ if check_password():
 
         if st.button("💾 保存模板到云端"):
             try:
-                # 使用 upsert：如果 id=1 存在就更新，不存在就新建
                 supabase.table('email_templates').upsert(
                     {"id": 1, "subject": new_subject, "body": new_body}
                 ).execute()
-                st.success("✅ 模板已成功保存！明天的自动化任务将使用此最新内容。")
+                st.success("✅ 模板已成功保存！")
             except Exception as e:
-                st.error(f"保存失败，请检查数据库配置: {e}")
+                st.error(f"保存失败: {e}")
+        
+        # 💡 新增的终极测试模块
+        st.divider()
+        st.subheader("🚀 真实测试发信 (发送到你的邮箱)")
+        st.caption("因为还在免费测试期，系统只能往你**注册 Resend 时使用的那个邮箱**发信。由于使用的是临时测试发件人，邮件很可能会进垃圾箱，请注意查收。")
+        test_email = st.text_input("你的接收邮箱 (填你注册 Resend 用的邮箱)：")
+        
+        if st.button("一键发射测试邮件"):
+            if test_email:
+                try:
+                    # 调用 Resend API 发信
+                    r = resend.Emails.send({
+                        "from": "onboarding@resend.dev",  # Resend 提供的测试发件人
+                        "to": test_email,
+                        "subject": new_subject,
+                        "text": new_body
+                    })
+                    st.success("🎉 发射成功！快去你的邮箱（或垃圾箱）看一眼，这就是你刚才在网页上写的模板内容！")
+                except Exception as e:
+                    st.error(f"发送失败，请检查邮箱是否填写正确或 API Key 是否有效: {e}")
+            else:
+                st.warning("⚠️ 请先填写你的接收邮箱！")
