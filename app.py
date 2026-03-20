@@ -4,6 +4,7 @@ from supabase import create_client, Client
 import re
 from datetime import datetime
 import resend  
+import time # 新增：用于发信时的安全停顿
 
 # ================= 1. 页面配置 =================
 st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wide")
@@ -143,47 +144,86 @@ if check_password():
         else:
             st.info("云端数据库为空，快去录入吧！")
 
-    # --- 模块 4：邮件模板配置与测试 ---
+    # --- 模块 4：邮件模板配置中心 (V1.5 养号群发版) ---
     elif menu == "4. 邮件模板配置中心":
-        st.header("📝 自动化发信模板配置")
-        st.info("💡 你的域名已成功验证！现在发出的邮件将畅通无阻。")
+        st.header("📝 自动化发信与养号控制台")
+        st.info("💡 你的域名已成功验证！当前处于新域名【养号期】，请严格控制每日发信量。")
 
+        # 1. 模板配置区
         response = supabase.table('email_templates').select("*").eq("id", 1).execute()
         existing_data = response.data
-
-        default_subject = existing_data[0]['subject'] if existing_data else "Collaboration opportunity with Kevvee"
-        default_body = existing_data[0]['body'] if existing_data else "Hi there,\n\nI loved your recent videos and think you'd be a perfect fit for a $100 paid collaboration with our brand.\n\nBest,\nShawn"
+        default_subject = existing_data[0]['subject'] if existing_data else "Paid Collab: Kevvee Platform x Kakapeople ✨"
+        default_body = existing_data[0]['body'] if existing_data else "Hi,\n\nI absolutely love your vibe and the aesthetic of your recent videos!"
 
         new_subject = st.text_input("✉️ 邮件标题 (Subject)：", value=default_subject)
-        new_body = st.text_area("📄 邮件正文 (Body)：", value=default_body, height=300)
+        new_body = st.text_area("📄 邮件正文 (Body)：", value=default_body, height=250)
 
         if st.button("💾 保存模板到云端"):
-            try:
-                supabase.table('email_templates').upsert(
-                    {"id": 1, "subject": new_subject, "body": new_body}
-                ).execute()
-                st.success("✅ 模板已成功保存！")
-            except Exception as e:
-                st.error(f"保存失败: {e}")
+            supabase.table('email_templates').upsert({"id": 1, "subject": new_subject, "body": new_body}).execute()
+            st.success("✅ 模板已成功保存！")
         
         st.divider()
-        st.subheader("🚀 真实全网发信测试")
-        st.caption("现在你可以发送给**任何私人邮箱**进行测试。请检查发件人名称、域名是否显示正确，以及是否能成功落入收件箱（而不是垃圾箱）。")
-        test_email = st.text_input("输入你的私人测试邮箱 (如 QQ, 网易, 或个人 Gmail)：")
         
-        if st.button("一键发射真实邮件"):
+        # 2. 真实单发测试区
+        st.subheader("🎯 步骤一：单发精准测试 (发给自己测排版)")
+        test_email = st.text_input("输入私人测试邮箱 (如 QQ, 网易)：")
+        if st.button("发送单封测试"):
             if test_email:
                 try:
-                    # 💡 注意这里：替换成了你的专属域名
-                    # 如果你在 Namecheap 开通的邮箱前缀不是 shawn，请把下面尖括号里的 shawn 换成你实际设置的那个！
-                    r = resend.Emails.send({
+                    resend.Emails.send({
                         "from": "Shawn <shawn@kevveesweety.com>",  
                         "to": test_email,
                         "subject": new_subject,
                         "text": new_body
                     })
-                    st.success("🎉 完美发射！快去你的私人邮箱看看这封以你官方身份发出的真实邮件吧！")
+                    st.success("🎉 测试邮件已发射！去收件箱看看效果。")
                 except Exception as e:
-                    st.error(f"发送失败，请检查 API Key 或网络: {e}")
+                    st.error(f"发送失败: {e}")
             else:
-                st.warning("⚠️ 请先填写接收邮箱！")
+                st.warning("请填写测试邮箱！")
+
+        st.divider()
+
+        # 3. 智能群发控制区 (带节流阀)
+        st.subheader("🚀 步骤二：向达人库批量发射 (带安全防封锁)")
+        
+        pending_response = supabase.table('influencer_emails').select("*").eq("status", "未回复").execute()
+        pending_df = pd.DataFrame(pending_response.data)
+        pending_count = len(pending_df)
+        
+        st.metric("当前库中【未回复】的达人总数", pending_count)
+        
+        if pending_count > 0:
+            send_limit = st.number_input("设置本次【最大发送配额】(免费版每日上限100，养号期建议每天 10-20):", min_value=1, max_value=100, value=10)
+            
+            if st.button(f"⚡️ 一键向 {min(send_limit, pending_count)} 位达人发射邮件"):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                target_emails = pending_df['email'].head(send_limit).tolist()
+                success_sent = 0
+                
+                for i, target in enumerate(target_emails):
+                    status_text.text(f"正在发送给: {target} ({i+1}/{len(target_emails)})...")
+                    try:
+                        resend.Emails.send({
+                            "from": "Shawn <shawn@kevveesweety.com>", 
+                            "to": target,
+                            "subject": new_subject,
+                            "text": new_body
+                        })
+                        # 发送成功后，把状态改成已触达，避免明天重复发
+                        supabase.table('influencer_emails').update({"status": "已发送"}).eq("email", target).execute()
+                        success_sent += 1
+                        
+                        # 每发一封停顿 0.6 秒，防止被当作机器封禁
+                        time.sleep(0.6) 
+                        progress_bar.progress((i + 1) / len(target_emails))
+                        
+                    except Exception as e:
+                        st.error(f"发送给 {target} 时出错: {e}")
+                
+                status_text.text(f"✅ 任务完成！成功发出 {success_sent} 封真实建联邮件。")
+                st.balloons()
+        else:
+            st.info("当前没有需要发信的达人，快去【模块 1】录入今天抓到的新邮箱吧！")
