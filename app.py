@@ -3,7 +3,7 @@ import pandas as pd
 from supabase import create_client, Client
 import re
 from datetime import datetime
-import resend  # 💡 新增：引入发件引擎
+import resend  
 
 # ================= 1. 页面配置 =================
 st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wide")
@@ -12,7 +12,7 @@ st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wid
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-    resend.api_key = st.secrets["RESEND_API_KEY"]  # 💡 新增：装载你刚才配置的钥匙
+    resend.api_key = st.secrets["RESEND_API_KEY"]  
 except Exception:
     st.error("❌ 未检测到 Secrets 配置，请在 Streamlit 后台设置环境变量。")
     st.stop()
@@ -146,13 +146,13 @@ if check_password():
     # --- 模块 4：邮件模板配置与测试 ---
     elif menu == "4. 邮件模板配置中心":
         st.header("📝 自动化发信模板配置")
-        st.info("💡 在这里修改的模板，将作为后续全自动二刷发信的标准内容。")
+        st.info("💡 你的域名已成功验证！现在发出的邮件将畅通无阻。")
 
         response = supabase.table('email_templates').select("*").eq("id", 1).execute()
         existing_data = response.data
 
-        default_subject = existing_data[0]['subject'] if existing_data else "Follow up regarding our collaboration"
-        default_body = existing_data[0]['body'] if existing_data else "Hi there,\n\nJust following up on my previous email to see if you'd be interested in collaborating with us!\n\nBest,\nShawn"
+        default_subject = existing_data[0]['subject'] if existing_data else "Collaboration opportunity with Kevvee"
+        default_body = existing_data[0]['body'] if existing_data else "Hi there,\n\nI loved your recent videos and think you'd be a perfect fit for a $100 paid collaboration with our brand.\n\nBest,\nShawn"
 
         new_subject = st.text_input("✉️ 邮件标题 (Subject)：", value=default_subject)
         new_body = st.text_area("📄 邮件正文 (Body)：", value=default_body, height=300)
@@ -166,24 +166,24 @@ if check_password():
             except Exception as e:
                 st.error(f"保存失败: {e}")
         
-        # 💡 新增的终极测试模块
         st.divider()
-        st.subheader("🚀 真实测试发信 (发送到你的邮箱)")
-        st.caption("因为还在免费测试期，系统只能往你**注册 Resend 时使用的那个邮箱**发信。由于使用的是临时测试发件人，邮件很可能会进垃圾箱，请注意查收。")
-        test_email = st.text_input("你的接收邮箱 (填你注册 Resend 用的邮箱)：")
+        st.subheader("🚀 真实全网发信测试")
+        st.caption("现在你可以发送给**任何私人邮箱**进行测试。请检查发件人名称、域名是否显示正确，以及是否能成功落入收件箱（而不是垃圾箱）。")
+        test_email = st.text_input("输入你的私人测试邮箱 (如 QQ, 网易, 或个人 Gmail)：")
         
-        if st.button("一键发射测试邮件"):
+        if st.button("一键发射真实邮件"):
             if test_email:
                 try:
-                    # 调用 Resend API 发信
+                    # 💡 注意这里：替换成了你的专属域名
+                    # 如果你在 Namecheap 开通的邮箱前缀不是 shawn，请把下面尖括号里的 shawn 换成你实际设置的那个！
                     r = resend.Emails.send({
-                        "from": "onboarding@resend.dev",  # Resend 提供的测试发件人
+                        "from": "Shawn <shawn@kevveesweety.com>",  
                         "to": test_email,
                         "subject": new_subject,
                         "text": new_body
                     })
-                    st.success("🎉 发射成功！快去你的邮箱（或垃圾箱）看一眼，这就是你刚才在网页上写的模板内容！")
+                    st.success("🎉 完美发射！快去你的私人邮箱看看这封以你官方身份发出的真实邮件吧！")
                 except Exception as e:
-                    st.error(f"发送失败，请检查邮箱是否填写正确或 API Key 是否有效: {e}")
+                    st.error(f"发送失败，请检查 API Key 或网络: {e}")
             else:
-                st.warning("⚠️ 请先填写你的接收邮箱！")
+                st.warning("⚠️ 请先填写接收邮箱！")
