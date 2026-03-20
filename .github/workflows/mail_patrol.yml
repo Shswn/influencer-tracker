@@ -1,0 +1,30 @@
+name: 🕵️ 达人回复自动巡逻兵
+
+on:
+  schedule:
+    # 这里的 cron 表达式代表：每隔 12 小时的第 0 分钟执行一次
+    - cron: '0 */12 * * *'
+  workflow_dispatch: # 这个配置允许你在 GitHub 网页上手动点击按钮立即运行（方便测试）
+
+jobs:
+  check-emails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 拉取最新代码
+        uses: actions/checkout@v3
+
+      - name: 🐍 配置 Python 环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 📦 安装依赖库
+        run: pip install supabase
+
+      - name: 🚀 执行巡逻脚本
+        env:
+          EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python check_replies.py
