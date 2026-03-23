@@ -4,7 +4,7 @@ from supabase import create_client, Client
 import re
 from datetime import datetime
 import resend  
-import time # 新增：用于发信时的安全停顿
+import time 
 
 # ================= 1. 页面配置 =================
 st.set_page_config(page_title="达人建联系统 (SaaS 云端版)", layout="wide")
@@ -144,7 +144,7 @@ if check_password():
         else:
             st.info("云端数据库为空，快去录入吧！")
 
-    # --- 模块 4：邮件模板配置中心 (V1.5 养号群发版) ---
+    # --- 模块 4：发信与时间戳记录 (实战版本) ---
     elif menu == "4. 邮件模板配置中心":
         st.header("📝 自动化发信与养号控制台")
         st.info("💡 你的域名已成功验证！当前处于新域名【养号期】，请严格控制每日发信量。")
@@ -171,7 +171,7 @@ if check_password():
             if test_email:
                 try:
                     resend.Emails.send({
-                        "from": "Shawn <shawn@kevveesweety.com>",  
+                        "from": "Shawn <shawn@kevveesweety.com>",  # ⚠️ 请确认前缀是 shawn
                         "to": test_email,
                         "subject": new_subject,
                         "text": new_body
@@ -184,7 +184,7 @@ if check_password():
 
         st.divider()
 
-        # 3. 智能群发控制区 (带节流阀)
+        # 3. 智能群发控制区 (带时间戳记录)
         st.subheader("🚀 步骤二：向达人库批量发射 (带安全防封锁)")
         
         pending_response = supabase.table('influencer_emails').select("*").eq("status", "未回复").execute()
@@ -212,18 +212,20 @@ if check_password():
                             "subject": new_subject,
                             "text": new_body
                         })
-                        # 发送成功后，把状态改成已触达，避免明天重复发
-                        supabase.table('influencer_emails').update({"status": "已发送"}).eq("email", target).execute()
-                        success_sent += 1
+                        # ⚠️ 极其关键的一步：发完之后，不但把状态改成“已发送”，还把现在的精确时间写进数据库！
+                        supabase.table('influencer_emails').update({
+                            "status": "已发送", 
+                            "last_contact_at": datetime.now().isoformat()
+                        }).eq("email", target).execute()
                         
-                        # 每发一封停顿 0.6 秒，防止被当作机器封禁
-                        time.sleep(0.6) 
+                        success_sent += 1
+                        time.sleep(0.6) # 停顿防封
                         progress_bar.progress((i + 1) / len(target_emails))
                         
                     except Exception as e:
                         st.error(f"发送给 {target} 时出错: {e}")
                 
-                status_text.text(f"✅ 任务完成！成功发出 {success_sent} 封真实建联邮件。")
+                status_text.text(f"✅ 任务完成！成功发出 {success_sent} 封真实建联邮件，时间戳已记录。")
                 st.balloons()
         else:
             st.info("当前没有需要发信的达人，快去【模块 1】录入今天抓到的新邮箱吧！")
